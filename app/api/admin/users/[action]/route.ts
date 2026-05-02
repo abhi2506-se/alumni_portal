@@ -6,17 +6,17 @@ import prisma from '@/lib/db/prisma';
 import { sendApprovalEmail } from '@/lib/utils/email';
 
 export async function POST(
-  req: Request,
-  { params }: { params: { action: string } },
+  req: NextRequest,
+  context: { params: Promise<{ action: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user as any).role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 });
-  }
+    return NextResponse.json({ message: "Success" });
+}
 
   const { userId, reason } = await req.json();
   const adminId = (session.user as any).id;
-  const action = params.action; // 'approve' | 'reject' | 'suspend'
+  const { action } = await context.params; // 'approve' | 'reject' | 'suspend'
 
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },

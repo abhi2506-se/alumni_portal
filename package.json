@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
@@ -50,7 +50,6 @@
     "nodemailer": "^7.0.7",
     "openai": "^4.29.0",
     "postcss": "^8",
-    "prisma": "^5.10.0",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
     "react": "^18",
@@ -75,6 +74,7 @@
   },
   "devDependencies": {
     "@types/socket.io": "^3.0.2",
+    "prisma": "^7.8.0",
     "tsx": "^4.7.0"
   }
 }

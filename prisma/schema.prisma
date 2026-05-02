@@ -1,0 +1,407 @@
+// Alumni Portal - Full Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  ALUMNI
+  ADMIN
+}
+
+enum AccountStatus {
+  PENDING      // Awaiting admin approval
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+  FREELANCE
+}
+
+enum MentorshipStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  MESSAGE
+  MENTOR_REQUEST
+  CONNECTION_REQUEST
+  JOB_POSTED
+  EVENT_CREATED
+  APPROVAL
+  SYSTEM
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  emailVerified     DateTime?
+  password          String?
+  role              Role          @default(STUDENT)
+  status            AccountStatus @default(PENDING)
+  otpSecret         String?
+  otpExpiry         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  profile           Profile?
+  accounts          Account[]
+  sessions          Session[]
+  sentMessages      Message[]     @relation("SentMessages")
+  connections       Connection[]  @relation("ConnectionRequester")
+  connectionsReceived Connection[] @relation("ConnectionReceiver")
+  jobPostings       Job[]
+  jobApplications   JobApplication[]
+  eventRSVPs        EventRSVP[]
+  mentorships       Mentorship[]  @relation("MentorMentorships")
+  menteeMentorships Mentorship[]  @relation("MenteeMentorships")
+  notifications     Notification[]
+  leaderboardEntry  Leaderboard?
+  successStory      SuccessStory?
+  adminActions      AdminAction[] @relation("AdminActions")
+  receivedAdminActions AdminAction[] @relation("TargetUser")
+
+  @@index([email])
+  @@index([role, status])
+}
+
+model Profile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal
+  firstName       String
+  lastName        String
+  avatar          String?
+  bio             String?  @db.Text
+  phone           String?
+  dateOfBirth     DateTime?
+  gender          String?
+
+  // Academic
+  batchYear       Int?
+  department      String?
+  degree          String?
+  cgpa            Float?
+  college         String?   @default("GEC Rajkot") // Your college name
+
+  // Professional
+  currentCompany  String?
+  currentRole     String?
+  yearsExperience Int?
+  skills          String[]  @default([])
+  achievements    String[]  @default([])
+  openToMentor    Boolean   @default(false)
+  mentorSlots     Int       @default(2) // how many mentees per week
+
+  // Location
+  city            String?
+  country         String?
+  latitude        Float?
+  longitude       Float?
+
+  // Social
+  linkedinUrl     String?
+  githubUrl       String?
+  twitterUrl      String?
+  portfolioUrl    String?
+  resumeUrl       String?
+
+  // Metadata
+  profileComplete Boolean  @default(false)
+  isPublic        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  availability    MentorAvailability[]
+
+  @@index([batchYear])
+  @@index([department])
+  @@index([currentCompany])
+  @@index([city, country])
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Connection {
+  id          String        @id @default(cuid())
+  requesterId String
+  receiverId  String
+  status      RequestStatus @default(PENDING)
+  message     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  requester   User          @relation("ConnectionRequester", fields: [requesterId], references: [id])
+  receiver    User          @relation("ConnectionReceiver", fields: [receiverId], references: [id])
+
+  // Chat room for this connection
+  chatRoom    ChatRoom?
+
+  @@unique([requesterId, receiverId])
+  @@index([receiverId, status])
+}
+
+model ChatRoom {
+  id           String     @id @default(cuid())
+  connectionId String     @unique
+  connection   Connection @relation(fields: [connectionId], references: [id])
+  messages     Message[]
+  createdAt    DateTime   @default(now())
+
+  @@index([connectionId])
+}
+
+model Message {
+  id          String        @id @default(cuid())
+  chatRoomId  String
+  chatRoom    ChatRoom      @relation(fields: [chatRoomId], references: [id])
+  senderId    String
+  sender      User          @relation("SentMessages", fields: [senderId], references: [id])
+  content     String        @db.Text // encrypted content
+  iv          String        // encryption IV
+  status      MessageStatus @default(SENT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([chatRoomId, createdAt])
+}
+
+model Job {
+  id           String   @id @default(cuid())
+  posterId     String
+  poster       User     @relation(fields: [posterId], references: [id])
+  title        String
+  company      String
+  description  String   @db.Text
+  requirements String[] @default([])
+  skills       String[] @default([])
+  location     String
+  type         JobType
+  salary       String?
+  applyUrl     String
+  deadline     DateTime?
+  isActive     Boolean  @default(true)
+  isApproved   Boolean  @default(false)
+  views        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  applications JobApplication[]
+
+  @@index([isActive, isApproved])
+  @@index([posterId])
+}
+
+model JobApplication {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, userId])
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  title       String
+  description String      @db.Text
+  bannerImage String?
+  startDate   DateTime
+  endDate     DateTime
+  location    String
+  isVirtual   Boolean     @default(false)
+  meetLink    String?
+  status      EventStatus @default(UPCOMING)
+  capacity    Int?
+  tags        String[]    @default([])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  rsvps       EventRSVP[]
+
+  @@index([startDate])
+  @@index([status])
+}
+
+model EventRSVP {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model MentorAvailability {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  dayOfWeek Int      // 0=Sun, 1=Mon, ...6=Sat
+  startTime String   // "09:00"
+  endTime   String   // "17:00"
+  createdAt DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model Mentorship {
+  id          String           @id @default(cuid())
+  mentorId    String
+  mentor      User             @relation("MentorMentorships", fields: [mentorId], references: [id])
+  menteeId    String
+  mentee      User             @relation("MenteeMentorships", fields: [menteeId], references: [id])
+  topic       String
+  description String?          @db.Text
+  scheduledAt DateTime
+  duration    Int              @default(60) // minutes
+  status      MentorshipStatus @default(PENDING)
+  meetLink    String?
+  notes       String?          @db.Text
+  rating      Int?             // 1-5 after completion
+  feedback    String?          @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([mentorId, status])
+  @@index([menteeId, status])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // extra payload (e.g., link, entityId)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model Leaderboard {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  mentorScore     Int      @default(0)
+  jobPostScore    Int      @default(0)
+  eventScore      Int      @default(0)
+  donationScore   Int      @default(0)
+  totalScore      Int      @default(0)
+  rank            Int?
+  updatedAt       DateTime @updatedAt
+}
+
+model SuccessStory {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  title       String
+  content     String   @db.Text
+  videoUrl    String?
+  thumbnailUrl String?
+  isApproved  Boolean  @default(false)
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AdminAction {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation("AdminActions", fields: [adminId], references: [id])
+  targetId   String
+  targetUser User     @relation("TargetUser", fields: [targetId], references: [id])
+  action     String   // "APPROVE", "REJECT", "SUSPEND", etc.
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+model Analytics {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now()) @db.Date
+  metric    String
+  value     Int
+  metadata  Json?
+
+  @@unique([date, metric])
+}

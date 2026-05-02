@@ -35,7 +35,7 @@
     "socket.io-client": "^4.7.4",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
-    "nodemailer": "^6.9.9",
+    "nodemailer": "^7.0.7",
     "@types/nodemailer": "^6.4.14",
     "zod": "^3.22.4",
     "react-hook-form": "^7.51.0",
